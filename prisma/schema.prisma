@@ -38,6 +38,7 @@ model resident {
 
   // ประวัติการเข้าพักทั้งหมด
   stays        residentStay[]
+  administraters administrater[]
 }
 
 model room {
@@ -95,3 +96,40 @@ model roomMeter {
   @@index([metorId, removedAt])
 }
 
+model administrater {
+  id           Int        @id @default(autoincrement())
+  residentId   Int?
+  first_name   String?
+  last_name    String?
+  username     String     @unique
+  password     String
+  role         adminRole  @default(ADMIN)
+  time_create  DateTime   @default(now())
+  time_stamp   DateTime   @default(now())
+
+  resident     resident?  @relation(fields: [residentId], references: [id], onDelete: SetNull)
+  configs_created config[] @relation("config_created_by")
+  configs_updated config[] @relation("config_updated_by")
+
+  // Ensure a resident is linked to at most one administrater
+  @@unique([residentId])
+}
+
+model config {
+  id               Int            @id @default(autoincrement())
+  electricity_rate Decimal        @db.Decimal(10,4) // บาทต่อหน่วยไฟ (kWh)
+  internet_fee     Decimal        @db.Decimal(10,2) // ค่าอินเทอร์เน็ตแบบเหมาจ่ายต่อเดือน
+  effective_from   DateTime       @default(now())   // มีผลตั้งแต่เวลาไหน
+  note             String?
+
+  createdById      Int?
+  updatedById      Int?
+
+  createdBy        administrater? @relation("config_created_by", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy        administrater? @relation("config_updated_by", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  time_create      DateTime       @default(now())
+  time_stamp       DateTime       @default(now())
+
+  @@index([effective_from])
+}
