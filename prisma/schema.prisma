@@ -10,63 +10,88 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+enum adminRole {
+  SUPERADMIN
+  ADMIN
+}
+
+enum roomSection {
+  SS1
+  SS2
+}
+
+
+
 model resident {
-  id Int @id() @default(autoincrement())
-  prefix String 
-  first_name String
-  last_name String
-  chaya String
-  tel String  
-  time_create DateTime @default(now())
-  time_stamp DateTime @default(now())
+  id           Int            @id @default(autoincrement())
+  prefix       String
+  first_name   String
+  last_name    String
+  chaya        String
+  tel          String
+  time_create  DateTime       @default(now())
+  time_stamp   DateTime       @default(now())
+
+  // ประวัติการเข้าพักทั้งหมด
+  stays        residentStay[]
 }
 
 model room {
-  id Int @id @default(autoincrement())
+  id           Int            @id @default(autoincrement())
+  section      roomSection
+  floor        Int
+  room_no      Int
+  time_create  DateTime       @default(now())
+  time_stamp   DateTime       @default(now())
 
+  // ประวัติผู้เข้าพักทั้งหมดของห้องนี้
+  stays        residentStay[]
+  metors       roomMeter[]
 }
 
-model mitor {
+model residentStay {
+  id           Int       @id @default(autoincrement())
+  residentId   Int
+  roomId       Int
+  movedInAt    DateTime  @default(now()) // วันที่/เวลาย้ายเข้า
+  movedOutAt   DateTime?                 // null = ยังพักอยู่
+  note         String?
+
+  resident     resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  room         room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  // ป้องกันการบันทึกซ้ำเวลาเดียวกันของคนเดียวกัน
+  @@unique([residentId, movedInAt])
+
+  // ควรมี index สำหรับ query บ่อย ๆ
+  @@index([residentId, movedOutAt])
+  @@index([roomId, movedOutAt])
+}
+
+model meter {
   id Int  @id @default(autoincrement())
-  mitor_no Int 
+  metor_no Int 
   time_create DateTime @default(now())
   time_stamp DateTime @default(now())
+
+  rooms roomMeter[]
 }
 
-model config{
-  id Int  @id @default(autoincrement())
-  multiply_mitor Int 
-  internet Int
-  time_create DateTime @default(now())
-  time_stamp DateTime @default(now())
+model roomMeter {
+  roomId      Int
+  metorId     Int
+  installedAt DateTime @default(now())
+  removedAt   DateTime?
+
+  room  room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  metor meter @relation(fields: [metorId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, metorId])
+  @@index([roomId, removedAt])
+  @@index([metorId, removedAt])
 }
 
-model billing {
-  id          Int      @id @default(autoincrement())
-  invoice_no  String   @unique                // เลขที่บิล
-  total       Float                             // จำนวนเงินรวม (required)
-  issuedAt    DateTime @default(now())          // วันที่ออกบิล
-  dueAt       DateTime?                         // วันครบกำหนด (optional)
-  note        String?
-
-  // Relation ไปยัง Payment
-  paymentId   Int
-  payment     payment @relation(fields: [paymentId], references: [id])
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model payment {
-  id        Int      @id @default(autoincrement())
-  amount    Float
-  method    String
-  paidAt    DateTime @default(now())
-
-  // back relation
-  billings  billing[]
-}
