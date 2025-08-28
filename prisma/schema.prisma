@@ -24,6 +24,14 @@ enum roomSection {
   SS2
 }
 
+enum paymentMethod {
+  CASH
+  TRANSFER
+  PROMPTPAY
+  CREDIT_CARD
+  OTHER
+}
+
 
 
 model resident {
@@ -64,6 +72,12 @@ model residentStay {
 
   resident     resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
   room         room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  // ค่าอินเทอร์เน็ตแบบเหมาจ่ายที่เรียกเก็บตามเดือน
+  internet_charges internetCharge[]
+
+  // รายชื่อผู้ใช้งานอินเทอร์เน็ตแบบรายเดือนของการเข้าพักนี้
+  internet_users   internetUserMonth[]
 
   // ป้องกันการบันทึกซ้ำเวลาเดียวกันของคนเดียวกัน
   @@unique([residentId, movedInAt])
@@ -111,6 +125,13 @@ model administrater {
   configs_created config[] @relation("config_created_by")
   configs_updated config[] @relation("config_updated_by")
 
+  // ความสัมพันธ์กับงานบิลค่าอินเทอร์เน็ต
+  internet_charges_created  internetCharge[]  @relation("internet_charge_created_by")
+  internet_charges_updated  internetCharge[]  @relation("internet_charge_updated_by")
+  internet_payments_recorded internetPayment[] @relation("internet_payment_recorded_by")
+  internet_users_created    internetUserMonth[] @relation("internet_user_month_created_by")
+  internet_users_updated    internetUserMonth[] @relation("internet_user_month_updated_by")
+
   // Ensure a resident is linked to at most one administrater
   @@unique([residentId])
 }
@@ -132,4 +153,75 @@ model config {
   time_stamp       DateTime       @default(now())
 
   @@index([effective_from])
+}
+
+model internetCharge {
+  id             Int           @id @default(autoincrement())
+  residentStayId Int
+  year           Int           // ค.ศ. เช่น 2025
+  month          Int           // 1–12
+  period_start   DateTime?     // ช่วงใบแจ้งหนี้ (ถ้าต้องการบันทึก)
+  period_end     DateTime?
+  amount         Decimal       @db.Decimal(10,2) // จำนวนเงินตาม config ณ ขณะออกบิล
+  due_date       DateTime?
+  isPaid         Boolean       @default(false)
+  paid_at        DateTime?
+  note           String?
+
+  createdById    Int?
+  updatedById    Int?
+
+  residentStay   residentStay  @relation(fields: [residentStayId], references: [id], onDelete: Cascade)
+  createdBy      administrater? @relation("internet_charge_created_by", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy      administrater? @relation("internet_charge_updated_by", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  payments       internetPayment[]
+
+  time_create    DateTime      @default(now())
+  time_stamp     DateTime      @default(now())
+
+  @@unique([residentStayId, year, month])
+  @@index([residentStayId, year, month])
+  @@index([due_date])
+}
+
+model internetPayment {
+  id            Int            @id @default(autoincrement())
+  chargeId      Int
+  amount        Decimal        @db.Decimal(10,2)
+  method        paymentMethod
+  paidAt        DateTime       @default(now())
+  recordedById  Int?
+  note          String?
+
+  charge        internetCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  recordedBy    administrater? @relation("internet_payment_recorded_by", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  time_create   DateTime       @default(now())
+  time_stamp    DateTime       @default(now())
+
+  @@index([chargeId, paidAt])
+}
+
+model internetUserMonth {
+  id              Int             @id @default(autoincrement())
+  residentStayId  Int
+  year            Int             // ค.ศ. เช่น 2025
+  month           Int             // 1–12
+  activatedAt     DateTime?       // วันที่/เวลาเพิ่มรายชื่อ (ถ้ามี)
+  note            String?
+
+  createdById     Int?
+  updatedById     Int?
+
+  residentStay    residentStay    @relation(fields: [residentStayId], references: [id], onDelete: Cascade)
+  createdBy       administrater?  @relation("internet_user_month_created_by", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       administrater?  @relation("internet_user_month_updated_by", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  time_create     DateTime        @default(now())
+  time_stamp      DateTime        @default(now())
+
+  @@unique([residentStayId, year, month])  // 1 การเข้าพัก ต่อ 1 เดือน ได้รายการเดียว
+  @@index([year, month])                    // คิวรีรายชื่อผู้ใช้ตามเดือน
+  @@index([residentStayId])
 }
