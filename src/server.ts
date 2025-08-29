@@ -13,7 +13,7 @@ export async function buildApp() {
   const app = Fastify({ logger: true });
 
   await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
-  
+
   await app.register(cors, {
     origin: (origin, cb) => cb(null, true), // ปรับ allow-list ในโปรดักชัน
     credentials: true,
@@ -23,9 +23,7 @@ export async function buildApp() {
   await app.register(prismaPlugin);
 
   // routes
-
-  // hook ตรวจ access token
-
+  
 
   return app;
 }
