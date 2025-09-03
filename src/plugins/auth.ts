@@ -5,20 +5,22 @@ import cookie from "@fastify/cookie";
 
 export default fp(async (app) => {
   await app.register(cookie, { hook: "onRequest" });
-  await app.register(jwt, {
-    secret: process.env.JWT_ACCESS_SECRET!,
-  });
+  await app.register(jwt, { secret: process.env.JWT_ACCESS_SECRET! });
 
-  // decorator: require access token
+  // preHandler สำหรับ route ที่ต้องการ auth
   app.decorate("auth", async (req: any) => {
     const auth = req.headers.authorization;
     if (!auth?.startsWith("Bearer ")) {
-      throw app.httpErrors.unauthorized();
+      const err: any = new Error("Unauthorized");
+      err.statusCode = 401;
+      throw err;
     }
     try {
       req.user = await req.jwtVerify();
     } catch {
-      throw app.httpErrors.unauthorized();
+      const err: any = new Error("Unauthorized");
+      err.statusCode = 401;
+      throw err;
     }
   });
 });
